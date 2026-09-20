@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:verify": "node scripts/verificar-migraciones.mjs",
+    "db:types": "node scripts/generar-tipos.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",
@@ -21,6 +26,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -30,6 +36,7 @@
     "supabase": "^2.117.0",
     "tailwindcss": "^4",
     "typescript": "^5",
+    "vite": "^8.3.0",
     "vitest": "^5.0.1"
   }
 }
