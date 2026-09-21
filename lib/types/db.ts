@@ -475,6 +475,10 @@ export interface Database {
           ultimo_out_at: string | null
           reinicios: number
           creado_en: string
+          qstash_schedule_id: string | null
+          primer_mensaje_sin_procesar_en: string | null
+          procesando_desde: string | null
+          intentos_fallidos: number
         }
         Insert: {
           id?: string
@@ -489,6 +493,10 @@ export interface Database {
           ultimo_out_at?: string | null
           reinicios?: number
           creado_en?: string
+          qstash_schedule_id?: string | null
+          primer_mensaje_sin_procesar_en?: string | null
+          procesando_desde?: string | null
+          intentos_fallidos?: number
         }
         Update: {
           id?: string
@@ -503,6 +511,10 @@ export interface Database {
           ultimo_out_at?: string | null
           reinicios?: number
           creado_en?: string
+          qstash_schedule_id?: string | null
+          primer_mensaje_sin_procesar_en?: string | null
+          procesando_desde?: string | null
+          intentos_fallidos?: number
         }
         Relationships: [
           {
@@ -953,6 +965,7 @@ export interface Database {
           estado_envio: string | null
           error: string | null
           creado_en: string
+          procesado: boolean
         }
         Insert: {
           id?: string
@@ -968,6 +981,7 @@ export interface Database {
           estado_envio?: string | null
           error?: string | null
           creado_en?: string
+          procesado?: boolean
         }
         Update: {
           id?: string
@@ -983,6 +997,7 @@ export interface Database {
           estado_envio?: string | null
           error?: string | null
           creado_en?: string
+          procesado?: boolean
         }
         Relationships: [
           {
@@ -1984,6 +1999,32 @@ export interface Database {
           },
         ]
       }
+      wa_envios_recientes: {
+        Row: {
+          tenant_id: string
+          destino: string
+          ultimo_envio_en: string
+        }
+        Insert: {
+          tenant_id: string
+          destino: string
+          ultimo_envio_en?: string
+        }
+        Update: {
+          tenant_id?: string
+          destino?: string
+          ultimo_envio_en?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'wa_envios_recientes_tenant_id_fkey'
+            columns: ['tenant_id']
+            isOneToOne: false
+            referencedRelation: 'tenants'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       wa_outbox: {
         Row: {
           id: string
@@ -1997,6 +2038,9 @@ export interface Database {
           error: string | null
           idempotency_key: string | null
           creado_en: string
+          reclamado_en: string | null
+          enviado_en: string | null
+          wa_message_id: string | null
         }
         Insert: {
           id?: string
@@ -2010,6 +2054,9 @@ export interface Database {
           error?: string | null
           idempotency_key?: string | null
           creado_en?: string
+          reclamado_en?: string | null
+          enviado_en?: string | null
+          wa_message_id?: string | null
         }
         Update: {
           id?: string
@@ -2023,6 +2070,9 @@ export interface Database {
           error?: string | null
           idempotency_key?: string | null
           creado_en?: string
+          reclamado_en?: string | null
+          enviado_en?: string | null
+          wa_message_id?: string | null
         }
         Relationships: [
           {
@@ -2165,8 +2215,21 @@ export interface Database {
     }
     Views: { [_ in never]: never }
     Functions: {
-      mis_tenants: { Args: Record<PropertyKey, never>; Returns: string[] }
+      cerrar_turno: { Args: { p_conversacion_id: string; p_tenant_id: string; p_mensaje_ids: string[] }; Returns: number }
       es_miembro: { Args: { p_tenant_id: string }; Returns: boolean }
+      guardar_schedule_conversacion: { Args: { p_conversacion_id: string; p_tenant_id: string; p_schedule_id: string }; Returns: boolean }
+      liberar_lock_conversacion: { Args: { p_conversacion_id: string; p_tenant_id: string }; Returns: boolean }
+      marcar_outbox_enviado: { Args: { p_id: string; p_tenant_id: string; p_wa_message_id: string }; Returns: boolean }
+      marcar_outbox_fallido: { Args: { p_id: string; p_tenant_id: string; p_error: string; p_max_intentos?: number; p_segundos_espera?: number }; Returns: string }
+      mis_tenants: { Args: Record<PropertyKey, never>; Returns: string[] }
+      pausar_bot: { Args: { p_conversacion_id: string; p_tenant_id: string; p_minutos?: number }; Returns: boolean }
+      planificar_turno: { Args: { p_conversacion_id: string; p_tenant_id: string; p_ventana_max_segundos?: number }; Returns: unknown }
+      posponer_outbox: { Args: { p_id: string; p_tenant_id: string; p_segundos: number }; Returns: boolean }
+      reclamar_outbox: { Args: { p_limite?: number; p_segundos_colgado?: number }; Returns: unknown }
+      registrar_intento_fallido: { Args: { p_conversacion_id: string; p_tenant_id: string }; Returns: number }
+      rendirse_y_derivar: { Args: { p_conversacion_id: string; p_tenant_id: string; p_resumen: string; p_minutos_pausa?: number }; Returns: string }
+      reservar_envio_destino: { Args: { p_tenant_id: string; p_destino: string; p_segundos?: number }; Returns: unknown }
+      tomar_lock_conversacion: { Args: { p_conversacion_id: string; p_tenant_id: string; p_timeout_segundos?: number }; Returns: boolean }
     }
     Enums: {
       alcance_pausa: 'todo' | 'delivery' | 'takeaway'
@@ -2232,6 +2295,7 @@ export type Tenants = Tabla<'tenants'>
 export type Tickets = Tabla<'tickets'>
 export type Variantes = Tabla<'variantes'>
 export type WaCuentas = Tabla<'wa_cuentas'>
+export type WaEnviosRecientes = Tabla<'wa_envios_recientes'>
 export type WaOutbox = Tabla<'wa_outbox'>
 export type WaPlantillas = Tabla<'wa_plantillas'>
 export type WebhookEvents = Tabla<'webhook_events'>

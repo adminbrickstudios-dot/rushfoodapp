@@ -123,6 +123,65 @@ for (const fk of fks) {
   fksPorTabla.get(fk.tabla).push(fk)
 }
 
+// Las funciones propias, para poder llamarlas con .rpc() tipado. Se
+// introspeccionan en vez de listarse a mano: un nombre de argumento
+// mal escrito en un .rpc() es un error silencioso en runtime, y acá
+// lo caza el compilador.
+const funcionesCrudas = await q(`
+  select
+    p.proname                          as nombre,
+    p.pronargdefaults                  as con_default,
+    coalesce(p.proargnames, '{}')      as nombres,
+    coalesce(p.proargmodes::text[], '{}') as modos,
+    (select array_agg(t.typname order by k.ord)
+       from unnest(p.proargtypes) with ordinality as k(oid, ord)
+       join pg_type t on t.oid = k.oid) as tipos,
+    pg_get_function_result(p.oid)      as retorno
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public'
+    and p.prokind = 'f'
+    -- Los triggers no se llaman por RPC.
+    and p.prorettype <> 'pg_catalog.trigger'::regtype
+    and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')
+  order by p.proname
+`)
+
+const funciones = funcionesCrudas.map((f) => {
+  const tipos = f.tipos ?? []
+  // proargnames incluye también los OUT cuando la función devuelve
+  // TABLE(...); proargtypes sólo los de entrada. Hay que filtrar.
+  const modos = f.modos ?? []
+  const nombresEntrada = modos.length
+    ? (f.nombres ?? []).filter((_, i) => ['i', 'b', 'v'].includes(modos[i]))
+    : (f.nombres ?? [])
+
+  const total = tipos.length
+  const primerOpcional = total - Number(f.con_default ?? 0)
+
+  return {
+    nombre: f.nombre,
+    args: tipos.map((tipo, i) => ({
+      nombre: nombresEntrada[i] ?? `arg${i}`,
+      tipo,
+      opcional: i >= primerOpcional,
+    })),
+    // Los escalares se mapean; setof y TABLE(...) quedan en unknown a
+    // propósito, porque reproducirlos con fidelidad es más frágil que
+    // castear en el repo, que es donde se sabe qué se espera.
+    returns:
+      {
+        boolean: 'boolean',
+        integer: 'number',
+        bigint: 'number',
+        text: 'string',
+        uuid: 'string',
+        'SETOF uuid': 'string[]',
+        'SETOF text': 'string[]',
+      }[f.retorno] ?? 'unknown',
+  }
+})
+
 const L = []
 L.push('// GENERADO POR scripts/generar-tipos.mjs — NO EDITAR A MANO.')
 L.push('// Se regenera con: npm run db:types')
@@ -184,8 +243,12 @@ for (const [tabla, cols] of [...porTabla].sort(([a], [b]) => a.localeCompare(b))
 L.push('    }')
 L.push('    Views: { [_ in never]: never }')
 L.push('    Functions: {')
-L.push('      mis_tenants: { Args: Record<PropertyKey, never>; Returns: string[] }')
-L.push('      es_miembro: { Args: { p_tenant_id: string }; Returns: boolean }')
+for (const f of funciones) {
+  const args = f.args.length
+    ? `{ ${f.args.map((a) => `${a.nombre}${a.opcional ? '?' : ''}: ${tsDe(a.tipo)}`).join('; ')} }`
+    : 'Record<PropertyKey, never>'
+  L.push(`      ${f.nombre}: { Args: ${args}; Returns: ${f.returns} }`)
+}
 L.push('    }')
 L.push('    Enums: {')
 for (const e of enums) {

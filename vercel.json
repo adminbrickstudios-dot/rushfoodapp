@@ -1,0 +1,20 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/drenar-outbox",
+      "schedule": "* * * * *"
+    }
+  ],
+  "functions": {
+    "app/api/whatsapp/webhook/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/whatsapp/procesar/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/cron/drenar-outbox/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}
